@@ -1,0 +1,275 @@
+package com.yourcompany.clientmanagement.dao;
+
+import com.yourcompany.clientmanagement.model.Client;
+import java.math.BigDecimal;
+import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
+
+public class ClientDAO {
+    private static final String SELECT_ALL = "SELECT id, nom, activite, annee, forme_juridique, " +
+            "regime_fiscal, regime_cnas, recette_impots, observation, source, honoraires_mois, " +
+            "(honoraires_mois * 12) as montant, remaining_balance, phone, company, session_id, " +
+            "created_at, updated_at " +
+            "FROM clients WHERE session_id = ? ORDER BY nom";
+
+    private static final String SELECT_ALL_SESSIONS = "SELECT id, nom, activite, annee, forme_juridique, " +
+            "regime_fiscal, regime_cnas, recette_impots, observation, source, honoraires_mois, " +
+            "(honoraires_mois * 12) as montant, remaining_balance, phone, company, session_id, " +
+            "created_at, updated_at " +
+            "FROM clients ORDER BY session_id DESC, nom";
+
+    private static final String INSERT = "INSERT INTO clients (nom, activite, annee, " +
+            "forme_juridique, regime_fiscal, regime_cnas, recette_impots, observation, " +
+            "source, honoraires_mois, montant, remaining_balance, phone, company, session_id) " +
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+    private static final String UPDATE = "UPDATE clients SET nom=?, activite=?, annee=?, " +
+            "forme_juridique=?, regime_fiscal=?, regime_cnas=?, recette_impots=?, " +
+            "observation=?, source=?, honoraires_mois=?, montant=?, remaining_balance=?, phone=?, company=?, session_id=?, " +
+            "updated_at=CURRENT_TIMESTAMP WHERE id=?";
+
+    private static final String DELETE = "DELETE FROM clients WHERE id=?";
+    private static final String SELECT_BY_ID = "SELECT * FROM clients WHERE id = ?";
+    private static final String SEARCH = "SELECT * FROM clients WHERE session_id = ? AND (nom LIKE ? OR activite LIKE ? OR company LIKE ?) ORDER BY nom";
+
+    // Get clients for current session
+    public List<Client> getAllClients(int sessionId) {
+        List<Client> clients = new ArrayList<>();
+
+        try (Connection conn = DatabaseConnection.getConnection();
+                PreparedStatement stmt = conn.prepareStatement(SELECT_ALL)) {
+
+            stmt.setInt(1, sessionId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    clients.add(mapResultSetToClient(rs));
+                }
+            }
+        } catch (SQLException e) {
+            handleException("Error fetching clients", e);
+        }
+        return clients;
+    }
+
+    // Get clients for all sessions (admin function)
+    public List<Client> getAllClientsAllSessions() {
+        List<Client> clients = new ArrayList<>();
+
+        try (Connection conn = DatabaseConnection.getConnection();
+                PreparedStatement stmt = conn.prepareStatement(SELECT_ALL_SESSIONS);
+                ResultSet rs = stmt.executeQuery()) {
+
+            while (rs.next()) {
+                clients.add(mapResultSetToClient(rs));
+            }
+        } catch (SQLException e) {
+            handleException("Error fetching clients from all sessions", e);
+        }
+        return clients;
+    }
+
+    public int insertClient(Client client) {
+        try (Connection conn = DatabaseConnection.getConnection();
+                PreparedStatement stmt = conn.prepareStatement(INSERT, Statement.RETURN_GENERATED_KEYS)) {
+
+            setCommonParameters(stmt, client);
+
+            int affectedRows = stmt.executeUpdate();
+            if (affectedRows == 0) {
+                throw new SQLException("Creating client failed, no rows affected.");
+            }
+
+            try (ResultSet generatedKeys = stmt.getGeneratedKeys()) {
+                if (generatedKeys.next()) {
+                    return generatedKeys.getInt(1);
+                } else {
+                    throw new SQLException("Creating client failed, no ID obtained.");
+                }
+            }
+        } catch (SQLException e) {
+            handleException("Error inserting client", e);
+            return -1;
+        }
+    }
+
+    public boolean updateClient(Client client) {
+        try (Connection conn = DatabaseConnection.getConnection();
+                PreparedStatement stmt = conn.prepareStatement(UPDATE)) {
+
+            setCommonParameters(stmt, client);
+            stmt.setInt(15, client.getId());
+            stmt.setInt(16, client.getId());
+
+            return stmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            handleException("Error updating client", e);
+            return false;
+        }
+    }
+
+    public boolean deleteClientById(int id) {
+        try (Connection conn = DatabaseConnection.getConnection();
+                PreparedStatement stmt = conn.prepareStatement(DELETE)) {
+
+            stmt.setInt(1, id);
+            return stmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            handleException("Error deleting client", e);
+            return false;
+        }
+    }
+
+    public Client getClientById(int id) {
+        try (Connection conn = DatabaseConnection.getConnection();
+                PreparedStatement stmt = conn.prepareStatement(SELECT_BY_ID)) {
+
+            stmt.setInt(1, id);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return mapResultSetToClient(rs);
+                }
+            }
+        } catch (SQLException e) {
+            handleException("Error fetching client by ID", e);
+        }
+        return null;
+    }
+
+    public List<Client> searchClients(String keyword, int sessionId) {
+        List<Client> clients = new ArrayList<>();
+        try (Connection conn = DatabaseConnection.getConnection();
+                PreparedStatement stmt = conn.prepareStatement(SEARCH)) {
+
+            stmt.setInt(1, sessionId);
+            String likeKeyword = "%" + keyword + "%";
+            stmt.setString(2, likeKeyword);
+            stmt.setString(3, likeKeyword);
+            stmt.setString(4, likeKeyword);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    clients.add(mapResultSetToClient(rs));
+                }
+            }
+        } catch (SQLException e) {
+            handleException("Error searching clients", e);
+        }
+        return clients;
+    }
+
+    private void setCommonParameters(PreparedStatement stmt, Client client) throws SQLException {
+        Double montantAnnual = calculateAnnualAmount(client.getHonorairesMois());
+
+        stmt.setString(1, client.getNom());
+        stmt.setString(2, client.getActivite());
+        stmt.setString(3, client.getAnnee());
+        stmt.setString(4, client.getFormeJuridique());
+        stmt.setString(5, client.getRegimeFiscal());
+        stmt.setString(6, client.getRegimeCnas());
+        stmt.setString(7, client.getRecetteImpots());
+        stmt.setString(8, client.getObservation());
+        stmt.setObject(9, client.getSource(), Types.INTEGER);
+        stmt.setString(10, client.getHonorairesMois());
+        stmt.setObject(11, montantAnnual, Types.DECIMAL);
+        stmt.setObject(12, client.getRemainingBalance(), Types.DECIMAL);
+        stmt.setString(13, client.getPhone());
+        stmt.setString(14, client.getCompany());
+        stmt.setInt(15, client.getSessionId());
+    }
+
+    private Double calculateAnnualAmount(String honorairesMois) {
+        if (honorairesMois == null || honorairesMois.isEmpty()) {
+            return null;
+        }
+        try {
+            double monthlyAmount = Double.parseDouble(honorairesMois);
+            return monthlyAmount * 12;
+        } catch (NumberFormatException e) {
+            System.err.println("Invalid honoraires_mois format: " + honorairesMois);
+            return null;
+        }
+    }
+
+    private Client mapResultSetToClient(ResultSet rs) throws SQLException {
+        Client client = new Client();
+        client.setId(rs.getInt("id"));
+        client.setNom(rs.getString("nom"));
+        client.setActivite(rs.getString("activite"));
+        client.setAnnee(rs.getString("annee"));
+        client.setFormeJuridique(rs.getString("forme_juridique"));
+        client.setRegimeFiscal(rs.getString("regime_fiscal"));
+        client.setRegimeCnas(rs.getString("regime_cnas"));
+        client.setRecetteImpots(rs.getString("recette_impots"));
+        client.setObservation(rs.getString("observation"));
+        client.setSource(rs.getObject("source") != null ? rs.getInt("source") : null);
+        client.setHonorairesMois(rs.getString("honoraires_mois"));
+
+        BigDecimal montantBD = rs.getBigDecimal("montant");
+        client.setMontant(montantBD != null ? montantBD.doubleValue() : null);
+
+        BigDecimal remainingBalanceBD = rs.getBigDecimal("remaining_balance");
+        client.setRemainingBalance(remainingBalanceBD != null ? remainingBalanceBD.doubleValue() : null);
+
+        client.setPhone(rs.getString("phone"));
+        client.setCompany(rs.getString("company"));
+        client.setSessionId(rs.getInt("session_id"));
+        client.setCreatedAt(rs.getString("created_at"));
+        client.setUpdatedAt(rs.getString("updated_at"));
+
+        return client;
+    }
+
+    // Method to get remaining balance for a client (now from database)
+    public BigDecimal getRemainingBalanceById(int clientId) {
+        String sql = "SELECT remaining_balance FROM clients WHERE id = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setInt(1, clientId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    BigDecimal balance = rs.getBigDecimal("remaining_balance");
+                    return balance != null ? balance : BigDecimal.ZERO;
+                }
+            }
+        } catch (SQLException e) {
+            handleException("Error fetching remaining balance", e);
+        }
+        return BigDecimal.ZERO;
+    }
+
+    // Method to manually recalculate balance for a client
+    public boolean recalculateClientBalance(int clientId) {
+        String sql = "CALL RecalculateClientBalance(?)";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setInt(1, clientId);
+            stmt.execute();
+            return true;
+        } catch (SQLException e) {
+            handleException("Error recalculating client balance", e);
+            return false;
+        }
+    }
+
+    // Method to recalculate all balances
+    public boolean recalculateAllBalances() {
+        String sql = "CALL RecalculateAllBalances()";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.execute();
+            return true;
+        } catch (SQLException e) {
+            handleException("Error recalculating all balances", e);
+            return false;
+        }
+    }
+
+    private void handleException(String message, SQLException e) {
+        System.err.println(message + ": " + e.getMessage());
+        e.printStackTrace();
+    }
+}
