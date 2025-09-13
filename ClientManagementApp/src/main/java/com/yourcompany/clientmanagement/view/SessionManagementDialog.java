@@ -252,12 +252,29 @@ public class SessionManagementDialog extends JDialog {
         dialog.setVisible(true);
         if (dialog.isConfirmed()) {
             Session newSession = dialog.getSession();
-            int result = sessionController.addSession(newSession);
-            if (result > 0) {
-                loadSessionData();
-                JOptionPane.showMessageDialog(this, "Session créée avec succès!");
-            } else {
-                JOptionPane.showMessageDialog(this, "Erreur lors de la création", "Erreur", JOptionPane.ERROR_MESSAGE);
+            try {
+                int result = sessionController.addSession(newSession);
+                if (result > 0) {
+                    loadSessionData();
+                    JOptionPane.showMessageDialog(this, 
+                        "Session créée avec succès!\n" +
+                        "ID: " + result + "\n" +
+                        "Année: " + newSession.getYear(),
+                        "Succès",
+                        JOptionPane.INFORMATION_MESSAGE);
+                } else {
+                    JOptionPane.showMessageDialog(this, "Erreur lors de la création", "Erreur", JOptionPane.ERROR_MESSAGE);
+                }
+            } catch (IllegalArgumentException e) {
+                JOptionPane.showMessageDialog(this, 
+                    e.getMessage(), 
+                    "Erreur de validation", 
+                    JOptionPane.WARNING_MESSAGE);
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(this, 
+                    "Erreur lors de la création: " + e.getMessage(), 
+                    "Erreur", 
+                    JOptionPane.ERROR_MESSAGE);
             }
         }
     }
@@ -276,11 +293,27 @@ public class SessionManagementDialog extends JDialog {
             dialog.setVisible(true);
             if (dialog.isConfirmed()) {
                 Session updatedSession = dialog.getSession();
-                if (sessionController.updateSession(updatedSession)) {
-                    loadSessionData();
-                    JOptionPane.showMessageDialog(this, "Session modifiée avec succès!");
-                } else {
-                    JOptionPane.showMessageDialog(this, "Erreur lors de la modification", "Erreur", JOptionPane.ERROR_MESSAGE);
+                try {
+                    if (sessionController.updateSession(updatedSession)) {
+                        loadSessionData();
+                        JOptionPane.showMessageDialog(this, 
+                            "Session modifiée avec succès!\n" +
+                            "Année: " + updatedSession.getYear(),
+                            "Succès",
+                            JOptionPane.INFORMATION_MESSAGE);
+                    } else {
+                        JOptionPane.showMessageDialog(this, "Erreur lors de la modification", "Erreur", JOptionPane.ERROR_MESSAGE);
+                    }
+                } catch (IllegalArgumentException e) {
+                    JOptionPane.showMessageDialog(this, 
+                        e.getMessage(), 
+                        "Erreur de validation", 
+                        JOptionPane.WARNING_MESSAGE);
+                } catch (Exception e) {
+                    JOptionPane.showMessageDialog(this, 
+                        "Erreur lors de la modification: " + e.getMessage(), 
+                        "Erreur", 
+                        JOptionPane.ERROR_MESSAGE);
                 }
             }
         }

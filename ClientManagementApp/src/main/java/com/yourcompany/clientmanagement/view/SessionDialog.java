@@ -319,6 +319,12 @@ public class SessionDialog extends JDialog {
             return;
         }
 
+        // Check for duplicate year (only for new sessions or when year is changed)
+        if (session == null || !session.getYear().equals(year)) {
+            // This validation will be handled by the DAO, but we can show a user-friendly message
+            // The actual duplicate check will happen in SessionDAO.insertSession() or updateSession()
+        }
+
         confirmed = true;
         dispose();
     }

@@ -97,6 +97,11 @@ public class SessionDAO {
 
     // Insert new session
     public int insertSession(Session session) {
+        // First check if a session with this year already exists
+        if (sessionExistsForYear(session.getYear())) {
+            throw new IllegalArgumentException("Une session existe déjà pour l'année " + session.getYear());
+        }
+        
         String sql = "INSERT INTO sessions (year, name, start_date, end_date, is_active, is_current, description) "
                 + "VALUES (?, ?, ?, ?, ?, ?, ?)";
 
@@ -110,6 +115,11 @@ public class SessionDAO {
             stmt.setBoolean(5, session.isActive());
             stmt.setBoolean(6, session.isCurrent());
             stmt.setString(7, session.getDescription());
+
+            // If this session is set as current, unset all other current sessions first
+            if (session.isCurrent()) {
+                unsetAllCurrentSessions(conn);
+            }
 
             int affectedRows = stmt.executeUpdate();
 
@@ -132,13 +142,57 @@ public class SessionDAO {
         }
     }
 
+    // Check if session exists for a given year
+    private boolean sessionExistsForYear(String year) {
+        String sql = "SELECT COUNT(*) FROM sessions WHERE year = ?";
+        
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setString(1, year);
+            
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1) > 0;
+                }
+            }
+            
+        } catch (SQLException e) {
+            System.err.println("Error checking if session exists for year: " + e.getMessage());
+            e.printStackTrace();
+        }
+        
+        return false;
+    }
+    
+    // Helper method to unset all current sessions
+    private void unsetAllCurrentSessions(Connection conn) throws SQLException {
+        String sql = "UPDATE sessions SET is_current = FALSE WHERE is_current = TRUE";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.executeUpdate();
+        }
+    }
+
     // Update session
     public boolean updateSession(Session session) {
+        // Check if trying to change year to an existing year (but allow same year for current session)
+        Session existingSession = getSessionById(session.getId());
+        if (existingSession != null && !existingSession.getYear().equals(session.getYear())) {
+            if (sessionExistsForYear(session.getYear())) {
+                throw new IllegalArgumentException("Une session existe déjà pour l'année " + session.getYear());
+            }
+        }
+        
         String sql = "UPDATE sessions SET year=?, name=?, start_date=?, end_date=?, is_active=?, is_current=?, description=?, updated_at=CURRENT_TIMESTAMP "
                 + "WHERE id=?";
 
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            // If this session is set as current, unset all other current sessions first
+            if (session.isCurrent()) {
+                unsetAllCurrentSessions(conn);
+            }
 
             stmt.setString(1, session.getYear());
             stmt.setString(2, session.getName());
@@ -242,6 +296,25 @@ public class SessionDAO {
 
     // Create default session for a year
     public int createDefaultSessionForYear(String year) {
+        // Check if session already exists for this year
+        if (sessionExistsForYear(year)) {
+            // Return the existing session ID instead of creating a new one
+            String sql = "SELECT id FROM sessions WHERE year = ?";
+            try (Connection conn = DatabaseConnection.getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(sql)) {
+                
+                stmt.setString(1, year);
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        return rs.getInt("id");
+                    }
+                }
+            } catch (SQLException e) {
+                System.err.println("Error getting existing session for year: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+        
         Session session = new Session();
         session.setYear(year);
         session.setName("Session " + year);
@@ -252,6 +325,28 @@ public class SessionDAO {
         session.setDescription("Session par défaut pour l'année " + year);
 
         return insertSession(session);
+    }
+
+    // Get or create session for year
+    public int getOrCreateSessionForYear(String year) {
+        // First try to get existing session
+        String sql = "SELECT id FROM sessions WHERE year = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            
+            stmt.setString(1, year);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt("id");
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Error getting session for year: " + e.getMessage());
+            e.printStackTrace();
+        }
+        
+        // If not found, create new session
+        return createDefaultSessionForYear(year);
     }
 
     // Map ResultSet to Session object

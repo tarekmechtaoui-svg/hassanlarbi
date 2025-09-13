@@ -61,7 +61,14 @@ public class SessionController {
             throw new IllegalArgumentException("Start date must be before end date");
         }
 
-        return sessionDAO.insertSession(session);
+        try {
+            return sessionDAO.insertSession(session);
+        } catch (IllegalArgumentException e) {
+            // Re-throw validation errors from DAO
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("Error creating session: " + e.getMessage(), e);
+        }
     }
 
     // Update a session
@@ -73,7 +80,14 @@ public class SessionController {
             throw new IllegalArgumentException("Valid session ID is required for update");
         }
 
-        return sessionDAO.updateSession(session);
+        try {
+            return sessionDAO.updateSession(session);
+        } catch (IllegalArgumentException e) {
+            // Re-throw validation errors from DAO
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("Error updating session: " + e.getMessage(), e);
+        }
     }
 
     // Delete a session
