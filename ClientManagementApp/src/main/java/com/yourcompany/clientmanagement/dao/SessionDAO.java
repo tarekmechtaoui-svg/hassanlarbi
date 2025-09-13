@@ -160,13 +160,19 @@ public class SessionDAO {
 
     // Set current session (will automatically unset others via trigger)
     public boolean setCurrentSession(int sessionId) {
-        String sql = "UPDATE sessions SET is_current = TRUE WHERE id = ?";
+        String sql1 = "UPDATE sessions SET is_current = FALSE WHERE is_current = TRUE";
+        String sql2 = "UPDATE sessions SET is_current = TRUE WHERE id = ?";
 
         try (Connection conn = DatabaseConnection.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+             PreparedStatement stmt1 = conn.prepareStatement(sql1);
+             PreparedStatement stmt2 = conn.prepareStatement(sql2)) {
 
-            stmt.setInt(1, sessionId);
-            return stmt.executeUpdate() > 0;
+            // First unset all current sessions
+            stmt1.executeUpdate();
+            
+            // Then set the new current session
+            stmt2.setInt(1, sessionId);
+            return stmt2.executeUpdate() > 0;
 
         } catch (SQLException e) {
             System.err.println("Error setting current session: " + e.getMessage());

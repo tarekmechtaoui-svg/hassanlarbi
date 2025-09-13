@@ -316,3 +316,69 @@ public class SessionManagementDialog extends JDialog {
                     "Les données affichées correspondent maintenant à cette session.");
             } else {
                 JOptionPane.showMessageDialog(this, "Erreur lors du changement de session", "Erreur", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
+    private void deleteSession() {
+        int selectedRow = sessionTable.getSelectedRow();
+        if (selectedRow == -1) {
+            JOptionPane.showMessageDialog(this, "Veuillez sélectionner une session", "Avertissement",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        int modelRow = sessionTable.convertRowIndexToModel(selectedRow);
+        int sessionId = (Integer) tableModel.getValueAt(modelRow, 0);
+        String sessionName = (String) tableModel.getValueAt(modelRow, 2);
+        boolean isCurrent = (Boolean) tableModel.getValueAt(modelRow, 6);
+
+        if (isCurrent) {
+            JOptionPane.showMessageDialog(this, 
+                "Impossible de supprimer la session actuelle.\n" +
+                "Veuillez d'abord basculer vers une autre session.", 
+                "Session actuelle", 
+                JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        int confirm = JOptionPane.showConfirmDialog(this,
+                "Êtes-vous sûr de vouloir supprimer la session '" + sessionName + "'?\n\n" +
+                "ATTENTION: Cette action supprimera également tous les clients\n" +
+                "et versements associés à cette session.\n\n" +
+                "Cette action est IRRÉVERSIBLE!",
+                "Confirmation de suppression",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE);
+
+        if (confirm == JOptionPane.YES_OPTION) {
+            // Double confirmation for safety
+            String confirmText = JOptionPane.showInputDialog(this,
+                "Pour confirmer la suppression, tapez le nom de la session:\n'" + sessionName + "'",
+                "Confirmation finale",
+                JOptionPane.WARNING_MESSAGE);
+
+            if (confirmText != null && confirmText.equals(sessionName)) {
+                if (sessionController.deleteSession(sessionId)) {
+                    loadSessionData();
+                    JOptionPane.showMessageDialog(this, "Session supprimée avec succès!");
+                } else {
+                    JOptionPane.showMessageDialog(this, 
+                        "Erreur lors de la suppression.\n" +
+                        "La session contient peut-être des données liées.", 
+                        "Erreur", 
+                        JOptionPane.ERROR_MESSAGE);
+                }
+            } else if (confirmText != null) {
+                JOptionPane.showMessageDialog(this, 
+                    "Le nom saisi ne correspond pas. Suppression annulée.", 
+                    "Suppression annulée", 
+                    JOptionPane.INFORMATION_MESSAGE);
+            }
+        }
+    }
+
+    public boolean hasSessionChanged() {
+        return sessionChanged;
+    }
+}

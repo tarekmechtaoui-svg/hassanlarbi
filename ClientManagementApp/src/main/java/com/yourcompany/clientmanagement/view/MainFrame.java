@@ -247,10 +247,16 @@ public class MainFrame extends JFrame {
         recalculateBalancesItem.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         recalculateBalancesItem.addActionListener(e -> recalculateAllBalances());
         
+        JMenuItem sessionManagementItem = new JMenuItem("📅 Gestion des Sessions");
+        sessionManagementItem.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        sessionManagementItem.addActionListener(e -> showSessionManagement());
+        
         viewMenu.add(themeToggleButton);
         viewMenu.addSeparator();
         viewMenu.add(refreshItem);
         viewMenu.add(recalculateBalancesItem);
+        viewMenu.addSeparator();
+        viewMenu.add(sessionManagementItem);
 
         // Help menu
         JMenu helpMenu = new JMenu("❓ Aide");
@@ -367,6 +373,28 @@ public class MainFrame extends JFrame {
             worker.execute();
         }
     }
+
+    private void showSessionManagement() {
+        SessionManagementDialog dialog = new SessionManagementDialog(this);
+        dialog.setVisible(true);
+        
+        // If session was changed, refresh all data
+        if (dialog.hasSessionChanged()) {
+            updateStatus("🔄 Session changée - Actualisation des données...");
+            refreshAllData();
+            
+            // Show notification about session change
+            SwingUtilities.invokeLater(() -> {
+                JOptionPane.showMessageDialog(this,
+                    "La session a été changée avec succès!\n" +
+                    "Toutes les données affichées correspondent maintenant à la nouvelle session.",
+                    "Session changée",
+                    JOptionPane.INFORMATION_MESSAGE);
+                updateStatus("✅ Données actualisées pour la nouvelle session");
+            });
+        }
+    }
+    
     private void updateStatus(String message) {
         if (statusLabel != null) {
             statusLabel.setText(message);
